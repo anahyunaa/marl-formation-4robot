@@ -1,0 +1,47 @@
+<launch>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+
+  <group ns="r1">
+    <param name="robot_description" command="$(find xacro)/xacro $(find skid_steer_description)/urdf/main_skid.xacro robot_name:=r1"/>
+    
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="rsp">
+      <param name="tf_prefix" value="r1"/>
+    </node>
+    
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_r1" 
+          args="-urdf -param robot_description -model r1 -robot_namespace r1 -x 0.0 -y 1.0 -z 0.1"/>
+  </group>
+
+  <group ns="r2">
+    <param name="robot_description" command="$(find xacro)/xacro $(find skid_steer_description)/urdf/main_skid.xacro robot_name:=r2"/>
+    
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="rsp">
+      <param name="tf_prefix" value="r2"/>
+    </node>
+    
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_r2" 
+          args="-urdf -param robot_description -model r2 -robot_namespace r2 -x 0.0 -y -1.0 -z 0.1"/>
+  </group>
+
+<group ns="r3">
+    <param name="robot_description" command="$(find xacro)/xacro $(find skid_steer_description)/urdf/main_skid.xacro robot_name:=r3"/>
+    
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="rsp">
+      <param name="tf_prefix" value="r3"/>
+    </node>
+    
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_r3" 
+          args="-urdf -param robot_description -model r3 -robot_namespace r3 -x 0.0 -y 2.5 -z 0.1"/>
+  </group>
+
+  <group ns="r4">
+    <param name="robot_description" command="$(find xacro)/xacro $(find skid_steer_description)/urdf/main_skid.xacro robot_name:=r4"/>
+    
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="rsp">
+      <param name="tf_prefix" value="r4"/>
+    </node>
+    
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_r4" 
+          args="-urdf -param robot_description -model r4 -robot_namespace r4 -x 0.0 -y -2.5 -z 0.1"/>
+  </group>
+</launch>
