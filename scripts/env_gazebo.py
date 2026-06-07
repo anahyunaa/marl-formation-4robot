@@ -44,8 +44,8 @@ CONTROL_RATE    = 10        # Hz
 MAX_STEPS       = 1000      # langkah per episode
 
 # Action bounds
-V_MAX           = 0.5       # m/s
-W_MAX           = 1.0       # rad/s
+V_MAX           = 0.3       # m/s
+W_MAX           = 0.5       # rad/s
 
 # Formation parameters
 D_TARGET        = 1.5       # meter — jarak target antar robot (side-by-side)
@@ -54,8 +54,8 @@ D_SAFE          = 0.75      # meter — jarak minimum sebelum collision penalty
 # Reward weights  (tunable)
 ALPHA           = 1.0       # bobot lateral error   ||dy| - d*|
 BETA            = 1.0       # bobot longitudinal error |dx|
-GAMMA           = 0.5       # bobot heading error   |dpsi|
-COLLISION_PEN   = 50.0      # penalty tabrakan (flat)
+GAMMA           = 1.0       # bobot heading error   |dpsi| ganti jadi 1 dari 0.5
+COLLISION_PEN   = 20.0      # penalty tabrakan (flat)
                               # HARUS jauh lebih besar dari max reward harian (~6/step)
                               # agar robot tidak exploit early termination
 
@@ -275,17 +275,17 @@ class GazeboFormationEnv(gym.Env):
 
         obs        = self._get_obs()
         reward     = self._compute_reward()
-        terminated = self._check_collision()          # tabrakan → episode selesai
+        terminated = False          # tabrakan → episode tetep ga selesai
         truncated  = self._step_count >= MAX_STEPS    # timeout
 
         # Stop robot saat episode berakhir
-        if terminated or truncated:
+        if truncated:
             self._stop_robot()
 
         info = {
             "step":          self._step_count,
             "robot":         self.robot_name,
-            "collision":     terminated,
+            "collision":     self._check_collision(),
         }
         return obs, reward, terminated, truncated, info
 
@@ -369,11 +369,14 @@ class GazeboFormationEnv(gym.Env):
             dist  = math.hypot(other["x"] - me["x"], other["y"] - me["y"])
             others.append((dist, name))
         others.sort(key=lambda t: t[0])
+        
         n1 = _shared_state[others[0][1]]
+        n2 = _shared_state[others[1][1]]          # ← tambah
         d1 = others[0][0]
-
         dx1, dy1 = self._to_body_frame(me, n1)
         dpsi1    = self._wrap_angle(n1["yaw"] - me["yaw"])
+        dpsi2    = self._wrap_angle(n2["yaw"] - me["yaw"])  # ← tambah
+        r_hdg2   = -abs(dpsi2)
 
         # Komponen reward
         r_lat = -abs(abs(dy1) - D_TARGET)   # lateral: |dy1| → D_TARGET
@@ -383,8 +386,9 @@ class GazeboFormationEnv(gym.Env):
         # Collision penalty
         r_col = -COLLISION_PEN if d1 < D_SAFE else 0.0
 
-        reward = ALPHA * r_lat + BETA * r_lon + GAMMA * r_hdg + r_col
-        return float(reward)
+        raw = (ALPHA * r_lat + BETA * r_lon +
+               GAMMA * r_hdg + GAMMA * 0.5 * r_hdg2 + r_col)
+        return float(raw / 10.0)
 
     def _check_collision(self) -> bool:
         """

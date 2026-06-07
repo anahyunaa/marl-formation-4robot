@@ -1,0 +1,28 @@
+Model: /home/anahyuna/marl_ws/src/marl_formation/models/ppo_shared_step600016
+Episodes: 20
+
+{'episode': 1, 'mean_distance_error_m': 2.3004, 'mean_heading_error_deg': 109.29, 'collinearity_error_m': 1.9779, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 2, 'mean_distance_error_m': 1.2031, 'mean_heading_error_deg': 91.55, 'collinearity_error_m': 0.6773, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 3, 'mean_distance_error_m': 0.2337, 'mean_heading_error_deg': 104.39, 'collinearity_error_m': 0.682, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 4, 'mean_distance_error_m': 0.6395, 'mean_heading_error_deg': 163.92, 'collinearity_error_m': 0.6252, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 5, 'mean_distance_error_m': 2.1109, 'mean_heading_error_deg': 110.8, 'collinearity_error_m': 1.0044, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 6, 'mean_distance_error_m': 0.8587, 'mean_heading_error_deg': 97.05, 'collinearity_error_m': 0.8325, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 7, 'mean_distance_error_m': 4.7018, 'mean_heading_error_deg': 104.51, 'collinearity_error_m': 1.6377, 'collision_count': 12, 'total_steps': 1000}
+{'episode': 8, 'mean_distance_error_m': 1.0597, 'mean_heading_error_deg': 111.33, 'collinearity_error_m': 0.4297, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 9, 'mean_distance_error_m': 2.1098, 'mean_heading_error_deg': 105.88, 'collinearity_error_m': 0.6419, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 10, 'mean_distance_error_m': 3.1512, 'mean_heading_error_deg': 114.31, 'collinearity_error_m': 0.996, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 11, 'mean_distance_error_m': 0.7013, 'mean_heading_error_deg': 105.52, 'collinearity_error_m': 0.5155, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 12, 'mean_distance_error_m': 1.7364, 'mean_heading_error_deg': 109.2, 'collinearity_error_m': 1.4103, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 13, 'mean_distance_error_m': 4.2634, 'mean_heading_error_deg': 113.23, 'collinearity_error_m': 1.7569, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 14, 'mean_distance_error_m': 0.8804, 'mean_heading_error_deg': 82.53, 'collinearity_error_m': 0.2273, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 15, 'mean_distance_error_m': 1.7813, 'mean_heading_error_deg': 113.69, 'collinearity_error_m': 0.8352, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 16, 'mean_distance_error_m': 1.9452, 'mean_heading_error_deg': 101.03, 'collinearity_error_m': 0.8207, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 17, 'mean_distance_error_m': 1.9185, 'mean_heading_error_deg': 98.02, 'collinearity_error_m': 1.3378, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 18, 'mean_distance_error_m': 1.8753, 'mean_heading_error_deg': 101.82, 'collinearity_error_m': 0.5808, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 19, 'mean_distance_error_m': 1.8894, 'mean_heading_error_deg': 107.13, 'collinearity_error_m': 1.0512, 'collision_count': 0, 'total_steps': 1000}
+{'episode': 20, 'mean_distance_error_m': 0.3303, 'mean_heading_error_deg': 91.82, 'collinearity_error_m': 0.4483, 'collision_count': 0, 'total_steps': 1000}
+
+Mean distance_error : 1.7845
+Mean heading_error  : 106.85
+Mean collinearity   : 0.9244
+Mean collision_steps: 0.6
