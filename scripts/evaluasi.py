@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 """
-evaluasi.py
-===========
-Script evaluasi formal untuk formasi 4 robot.
+evaluasi_square.py
+==================
+Script evaluasi formal untuk square formation 4 robot.
 
-Menjalankan N episode tanpa training, mencatat metrik per episode:
-- mean_distance_error  : rata-rata |d_actual - D_TARGET| ke neighbor terdekat
-- mean_heading_error   : rata-rata |dpsi1| dalam derajat
-- collinearity_error   : rata-rata jarak keempat robot dari garis lurus terbaik
-- collision_count      : jumlah timestep dengan jarak < D_SAFE
-- formation_steps      : timestep pertama semua metrik memenuhi threshold (opsional)
+Metrik per episode:
+- side_distance_error : rata-rata |d_actual - D_TARGET| ke 2 neighbor
+- angle_error_deg     : seberapa jauh sudut antar 2 neighbor dari 90°
+- collision_count     : jumlah timestep dengan jarak < D_SAFE
+- heading_error_deg   : rata-rata |dpsi| ke 2 neighbor (secondary)
 
 Cara pakai:
-    python3 evaluasi.py --model models/ppo_shared_step450012 --episodes 20
-    python3 evaluasi.py --model models/ppo_shared_step310012 --episodes 20
+    python3 evaluasi_square.py --model models/ppo_square_step160000 --episodes 20
+    python3 evaluasi_square.py --model models/ppo_square_step100000 --episodes 20
+    python3 evaluasi_square.py --model models/ppo_square_step200000 --episodes 20
 """
 
 import argparse
@@ -22,96 +22,101 @@ import os
 import sys
 import math
 import numpy as np
-import rospy
-
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from env_gazebo import GazeboFormationEnv, ROBOT_NAMES, _shared_state, D_TARGET, D_SAFE
+from env_gazebo import (GazeboFormationEnv, ROBOT_NAMES,
+                        _shared_state, D_TARGET, D_SAFE)
 
-import time
+import rospy
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 # ─────────────────────────────────────────────
-#  HELPER: COLLINEARITY ERROR
+#  FORMATION SUCCESS THRESHOLD (tunable)
+# ─────────────────────────────────────────────
+FORM_ANGLE_THRESH = 30.0   # derajat — angle error harus di bawah ini
+FORM_DIST_THRESH  = 1.0    # meter   — dist error harus di bawah ini
+FORM_WINDOW       = 50     # step berturutan yang harus memenuhi threshold
+
+
+# ─────────────────────────────────────────────
+#  HELPER METRICS
 # ─────────────────────────────────────────────
 
-def compute_collinearity_error() -> float:
+def get_sorted_neighbors(robot_name: str) -> list:
+    me = _shared_state[robot_name]
+    others = []
+    for name in ROBOT_NAMES:
+        if name == robot_name:
+            continue
+        d = math.hypot(
+            _shared_state[name]["x"] - me["x"],
+            _shared_state[name]["y"] - me["y"]
+        )
+        others.append((d, name))
+    others.sort(key=lambda t: t[0])
+    return others
+
+
+def to_body_frame(me: dict, other: dict) -> tuple:
+    dx_w = other["x"] - me["x"]
+    dy_w = other["y"] - me["y"]
+    yaw  = me["yaw"]
+    dx_l =  dx_w * math.cos(yaw) + dy_w * math.sin(yaw)
+    dy_l = -dx_w * math.sin(yaw) + dy_w * math.cos(yaw)
+    return dx_l, dy_l
+
+
+def wrap_angle(angle: float) -> float:
+    return (angle + math.pi) % (2 * math.pi) - math.pi
+
+
+def compute_metrics_all_robots() -> dict:
     """
-    Hitung rata-rata jarak keempat robot dari garis lurus terbaik (least squares fit).
-    
-    Metode:
-    1. Ambil posisi (x, y) keempat robot dari shared state
-    2. Fit garis lurus menggunakan least squares (numpy.polyfit)
-    3. Hitung jarak tegak lurus tiap robot ke garis tersebut
-    4. Return rata-rata jarak
-    
-    Nilai mendekati 0 = keempat robot hampir sempurna membentuk garis lurus.
+    Hitung metrik untuk semua robot, return rata-rata.
     """
-    positions = [(
-        _shared_state[name]["x"],
-        _shared_state[name]["y"]
-    ) for name in ROBOT_NAMES]
+    dist_errors  = []
+    angle_errors = []
+    hdg_errors   = []
 
-    xs = np.array([p[0] for p in positions])
-    ys = np.array([p[1] for p in positions])
+    for robot_name in ROBOT_NAMES:
+        me     = _shared_state[robot_name]
+        others = get_sorted_neighbors(robot_name)
 
-    # Cek apakah semua robot hampir di titik yang sama (degenerate case)
-    spread = np.std(xs) + np.std(ys)
-    if spread < 0.01:
-        return 0.0
+        n1 = _shared_state[others[0][1]]
+        n2 = _shared_state[others[1][1]]
+        d1 = others[0][0]
+        d2 = others[1][0]
 
-    # Fit garis: pilih orientasi fit berdasarkan variance
-    # Kalau xs lebih tersebar → fit y = ax + b
-    # Kalau ys lebih tersebar → fit x = ay + b (hindari vertical line problem)
-    if np.std(xs) >= np.std(ys):
-        coeffs = np.polyfit(xs, ys, 1)   # y = ax + b
-        a, b = coeffs
-        # Jarak titik (x0,y0) ke garis ax - y + b = 0: |ax0 - y0 + b| / sqrt(a²+1)
-        dists = [abs(a * x - y + b) / math.sqrt(a**2 + 1)
-                 for x, y in positions]
-    else:
-        coeffs = np.polyfit(ys, xs, 1)   # x = ay + b
-        a, b = coeffs
-        dists = [abs(a * y - x + b) / math.sqrt(a**2 + 1)
-                 for x, y in positions]
+        dx1, dy1 = to_body_frame(me, n1)
+        dx2, dy2 = to_body_frame(me, n2)
 
-    return float(np.mean(dists))
+        # Side distance error — rata-rata error ke 2 neighbor
+        dist_err = (abs(d1 - D_TARGET) + abs(d2 - D_TARGET)) / 2.0
+        dist_errors.append(dist_err)
 
+        # Angle error — sudut antar 2 neighbor vs target 90°
+        cos_angle   = (dx1*dx2 + dy1*dy2) / (d1 * d2 + 1e-6)
+        cos_angle   = max(-1.0, min(1.0, cos_angle))  # clamp numerical errors
+        actual_deg  = math.degrees(math.acos(cos_angle))  # tanpa abs() — 60° ≠ 120°
+        # Target 90°: error = |actual - 90|
+        angle_err   = abs(actual_deg - 90.0)
+        angle_errors.append(angle_err)
 
-def compute_heading_error(env: GazeboFormationEnv) -> float:
-    """
-    Rata-rata |dpsi1| dalam derajat untuk robot yang bersangkutan.
-    Dihitung dari shared state langsung.
-    """
-    me = _shared_state[env.robot_name]
-    others = sorted(
-        [(math.hypot(_shared_state[n]["x"] - me["x"],
-                     _shared_state[n]["y"] - me["y"]), n)
-         for n in ROBOT_NAMES if n != env.robot_name]
-    )
-    n1_yaw = _shared_state[others[0][1]]["yaw"]
-    dpsi   = abs(env._wrap_angle(n1_yaw - me["yaw"]))
-    return math.degrees(dpsi)
+        # Heading error ke 2 neighbor
+        dpsi1 = abs(wrap_angle(n1["yaw"] - me["yaw"]))
+        dpsi2 = abs(wrap_angle(n2["yaw"] - me["yaw"]))
+        hdg_errors.append(math.degrees((dpsi1 + dpsi2) / 2.0))
 
-
-def compute_distance_error(env: GazeboFormationEnv) -> float:
-    """
-    |d_actual - D_TARGET| ke neighbor terdekat robot ini.
-    """
-    me = _shared_state[env.robot_name]
-    others = sorted(
-        [(math.hypot(_shared_state[n]["x"] - me["x"],
-                     _shared_state[n]["y"] - me["y"]), n)
-         for n in ROBOT_NAMES if n != env.robot_name]
-    )
-    d1 = others[0][0]
-    return abs(d1 - D_TARGET)
+    return {
+        "dist_error" : float(np.mean(dist_errors)),
+        "angle_error": float(np.mean(angle_errors)),
+        "hdg_error"  : float(np.mean(hdg_errors)),
+    }
 
 
 def check_any_collision() -> bool:
-    """Cek apakah ada pasangan robot yang jaraknya < D_SAFE."""
     names = ROBOT_NAMES
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
@@ -129,72 +134,83 @@ def check_any_collision() -> bool:
 # ─────────────────────────────────────────────
 
 def evaluate_episode(envs: list, model: PPO, episode_num: int) -> dict:
-    """
-    Jalankan satu episode evaluasi, return dict metrik.
-    """
-    # Reset semua env
+    # Reset
     obs_list = []
     for env in envs:
         obs, _ = env.reset()
         obs_list.append(obs)
     obs_array = np.array(obs_list)
 
-    # Akumulasi metrik per step
-    step_distance_errors  = []
-    step_heading_errors   = []
-    step_collinearity     = []
-    collision_count       = 0
-
+    step_dist   = []
+    step_angle  = []
+    step_hdg    = []
+    collision_count = 0
     done = False
-    step = 0
+
+    # Formation tracking (threshold defined at module level)
+    formation_achieved    = False
+    time_to_formation     = -1   # -1 = tidak tercapai
+    consecutive_form_steps = 0
+    step_counter          = 0
 
     while not done:
-        # Predict action untuk semua robot sekaligus
         actions, _ = model.predict(obs_array, deterministic=True)
 
-        # Step semua env
         new_obs_list = []
         for i, env in enumerate(envs):
-            obs, reward, terminated, truncated, info = env.step(actions[i])
+            obs, _, _, truncated, _ = env.step(actions[i])
             new_obs_list.append(obs)
             if truncated:
                 done = True
 
         obs_array = np.array(new_obs_list)
-        step += 1
 
-        # Catat metrik per step
-        dist_errors = [compute_distance_error(env) for env in envs]
-        hdg_errors  = [compute_heading_error(env) for env in envs]
-        coll_err    = compute_collinearity_error()
-
-        step_distance_errors.append(np.mean(dist_errors))
-        step_heading_errors.append(np.mean(hdg_errors))
-        step_collinearity.append(coll_err)
+        m = compute_metrics_all_robots()
+        step_dist.append(m["dist_error"])
+        step_angle.append(m["angle_error"])
+        step_hdg.append(m["hdg_error"])
 
         if check_any_collision():
             collision_count += 1
 
-    # Ambil metrik di 100 step terakhir (kondisi akhir episode lebih relevan)
-    last_n = 100
-    final_distance_error  = float(np.mean(step_distance_errors[-last_n:]))
-    final_heading_error   = float(np.mean(step_heading_errors[-last_n:]))
-    final_collinearity    = float(np.mean(step_collinearity[-last_n:]))
+        # Cek apakah formasi tercapai di step ini
+        step_counter += 1
+        m_now = compute_metrics_all_robots()
+        if (m_now["angle_error"] < FORM_ANGLE_THRESH and
+                m_now["dist_error"] < FORM_DIST_THRESH):
+            consecutive_form_steps += 1
+            if (consecutive_form_steps >= FORM_WINDOW
+                    and not formation_achieved):
+                formation_achieved = True
+                time_to_formation  = step_counter
+        else:
+            consecutive_form_steps = 0  # reset kalau keluar threshold
 
+    # Rata-rata 100 step terakhir
+    last_n = 100
     result = {
-        "episode"               : episode_num,
-        "mean_distance_error_m" : round(final_distance_error, 4),
-        "mean_heading_error_deg": round(final_heading_error, 2),
-        "collinearity_error_m"  : round(final_collinearity, 4),
-        "collision_count"       : collision_count,
-        "total_steps"           : step,
+        "episode"                  : episode_num,
+        # Mean 100 step terakhir
+        "dist_error_m"             : round(float(np.mean(step_dist[-last_n:])), 4),
+        "angle_error_deg"          : round(float(np.mean(step_angle[-last_n:])), 2),
+        "heading_error_deg"        : round(float(np.mean(step_hdg[-last_n:])), 2),
+        # Kondisi step terakhir (untuk pertanyaan sidang "kondisi akhir formasi")
+        "final_dist_error_m"       : round(float(step_dist[-1]), 4),
+        "final_angle_error_deg"    : round(float(step_angle[-1]), 2),
+        "collision_count"          : collision_count,
+        "formation_achieved"       : formation_achieved,
+        "time_to_formation"        : time_to_formation,
     }
 
     print(f"\nEpisode {episode_num:02d}:")
-    print(f"  distance_error  = {result['mean_distance_error_m']:.4f} m")
-    print(f"  heading_error   = {result['mean_heading_error_deg']:.2f} °")
-    print(f"  collinearity    = {result['collinearity_error_m']:.4f} m")
-    print(f"  collision_count = {result['collision_count']} steps")
+    print(f"  dist_error   = {result['dist_error_m']:.4f} m  "
+          f"(final: {result['final_dist_error_m']:.4f} m)")
+    print(f"  angle_error  = {result['angle_error_deg']:.2f} °  "
+          f"(final: {result['final_angle_error_deg']:.2f} °)")
+    print(f"  heading_err  = {result['heading_error_deg']:.2f} °")
+    print(f"  collisions   = {result['collision_count']} steps")
+    status = f"step {result['time_to_formation']}" if result['formation_achieved'] else "TIDAK TERCAPAI"
+    print(f"  formation    = {'✓ TERCAPAI' if result['formation_achieved'] else '✗ tidak'} ({status})")
 
     return result
 
@@ -204,44 +220,41 @@ def evaluate_episode(envs: list, model: PPO, episode_num: int) -> dict:
 # ─────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluasi formal formasi 4 robot")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--model",    type=str,
-                        default="models/ppo_shared_step450012",
-                        help="Path ke model checkpoint (tanpa .zip)")
-    parser.add_argument("--episodes", type=int, default=20,
-                        help="Jumlah episode evaluasi")
+                        default="models/ppo_square_step160000",
+                        help="Path ke model (tanpa .zip)")
+    parser.add_argument("--episodes", type=int, default=20)
     args = parser.parse_args()
 
-    # Resolve path relatif ke lokasi script
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "..", args.model)
-    model_path = os.path.normpath(model_path)
+    model_path = os.path.normpath(
+        os.path.join(script_dir, "..", args.model)
+    )
 
     print("=" * 60)
-    print("Evaluasi Formal — Formasi 4 Robot")
+    print("Evaluasi Square Formation — 4 Robot")
     print("=" * 60)
     print(f"Model    : {model_path}.zip")
     print(f"Episodes : {args.episodes}")
     print()
     print("PASTIKAN: roslaunch marl_formation formasi_4_robot.launch")
-    print("          sudah berjalan di terminal lain!")
+    print("          sudah berjalan!")
     print()
-    input("Tekan ENTER untuk mulai evaluasi...")
+    input("Tekan ENTER untuk mulai...")
 
-    # Inisialisasi 4 env (satu per robot)
-    print("\nInisialisasi environment...")
+    # Inisialisasi env
+    print("\nInisialisasi 4 environment...")
     envs = [GazeboFormationEnv(robot_id=i, seed=42 + i)
             for i in range(len(ROBOT_NAMES))]
-    print("4 environment siap.\n")
 
     # Load model
-    # Buat dummy vec env hanya untuk load (model.predict tidak butuh vec env)
-    dummy_env = DummyVecEnv([lambda: GazeboFormationEnv(robot_id=0, seed=99)])
-    model = PPO.load(model_path, env=dummy_env)
-    dummy_env.close()
-    print(f"Model loaded: {model_path}.zip\n")
+    dummy = DummyVecEnv([lambda: GazeboFormationEnv(robot_id=0, seed=99)])
+    model = PPO.load(model_path, env=dummy)
+    dummy.close()
+    print(f"Model loaded.\n")
 
-    # Jalankan evaluasi
+    # Evaluasi
     all_results = []
     for ep in range(1, args.episodes + 1):
         result = evaluate_episode(envs, model, ep)
@@ -249,63 +262,76 @@ def main():
 
     # Summary
     print("\n" + "=" * 60)
-    print("SUMMARY EVALUASI")
+    print("SUMMARY EVALUASI — SQUARE FORMATION")
     print("=" * 60)
 
-    dist_errors  = [r["mean_distance_error_m"]  for r in all_results]
-    hdg_errors   = [r["mean_heading_error_deg"] for r in all_results]
-    coll_errors  = [r["collinearity_error_m"]   for r in all_results]
-    collisions   = [r["collision_count"]        for r in all_results]
+    dist_errs       = [r["dist_error_m"]         for r in all_results]
+    angle_errs      = [r["angle_error_deg"]      for r in all_results]
+    hdg_errs        = [r["heading_error_deg"]    for r in all_results]
+    collisions      = [r["collision_count"]      for r in all_results]
+    final_dist_errs = [r["final_dist_error_m"]   for r in all_results]
+    final_ang_errs  = [r["final_angle_error_deg"] for r in all_results]
 
-    print(f"Distance error  : mean={np.mean(dist_errors):.4f}m  "
-          f"std={np.std(dist_errors):.4f}m  "
-          f"min={np.min(dist_errors):.4f}m  max={np.max(dist_errors):.4f}m")
-    print(f"Heading error   : mean={np.mean(hdg_errors):.2f}°  "
-          f"std={np.std(hdg_errors):.2f}°  "
-          f"min={np.min(hdg_errors):.2f}°  max={np.max(hdg_errors):.2f}°")
-    print(f"Collinearity    : mean={np.mean(coll_errors):.4f}m  "
-          f"std={np.std(coll_errors):.4f}m  "
-          f"min={np.min(coll_errors):.4f}m  max={np.max(coll_errors):.4f}m")
-    print(f"Collision steps : mean={np.mean(collisions):.1f}  "
-          f"total={sum(collisions)}  "
+    # Urutan: Distance → Angle → Collision → Heading (sesuai prioritas reward)
+    print(f"1. Side distance error (mean 100 last steps):")
+    print(f"   mean={np.mean(dist_errs):.4f}m  std={np.std(dist_errs):.4f}m  "
+          f"min={np.min(dist_errs):.4f}m  max={np.max(dist_errs):.4f}m")
+    print(f"   final-step: mean={np.mean(final_dist_errs):.4f}m")
+    print(f"2. Angle error vs 90° (mean 100 last steps):")
+    print(f"   mean={np.mean(angle_errs):.2f}°  std={np.std(angle_errs):.2f}°  "
+          f"min={np.min(angle_errs):.2f}°  max={np.max(angle_errs):.2f}°")
+    print(f"   final-step: mean={np.mean(final_ang_errs):.2f}°")
+    print(f"3. Collision steps:")
+    print(f"   mean={np.mean(collisions):.1f}  total={sum(collisions)}  "
           f"max={max(collisions)}")
-    print()
-    print("─" * 60)
-    print("Distribusi (untuk menentukan threshold success):")
-    print(f"  distance_error < 0.3m : "
-          f"{sum(1 for x in dist_errors if x < 0.3)}/{len(dist_errors)} episode")
-    print(f"  distance_error < 0.5m : "
-          f"{sum(1 for x in dist_errors if x < 0.5)}/{len(dist_errors)} episode")
-    print(f"  heading_error  < 20°  : "
-          f"{sum(1 for x in hdg_errors if x < 20)}/{len(hdg_errors)} episode")
-    print(f"  heading_error  < 30°  : "
-          f"{sum(1 for x in hdg_errors if x < 30)}/{len(hdg_errors)} episode")
-    print(f"  collinearity   < 0.3m : "
-          f"{sum(1 for x in coll_errors if x < 0.3)}/{len(coll_errors)} episode")
-    print(f"  collinearity   < 0.5m : "
-          f"{sum(1 for x in coll_errors if x < 0.5)}/{len(coll_errors)} episode")
-    print(f"  zero collision        : "
-          f"{sum(1 for x in collisions if x == 0)}/{len(collisions)} episode")
-    print("─" * 60)
-    print()
-    print("→ Gunakan distribusi di atas untuk menentukan threshold success.")
-    print("  Jangan tentukan threshold sebelum melihat data ini.")
+    print(f"4. Heading error (secondary):")
+    print(f"   mean={np.mean(hdg_errs):.2f}°  std={np.std(hdg_errs):.2f}°")
 
-    # Simpan hasil ke file
-    output_path = os.path.join(script_dir, "..", "logs", "evaluasi_results.txt")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        f.write(f"Model: {model_path}\n")
-        f.write(f"Episodes: {args.episodes}\n\n")
+    # Formation success metrics
+    form_achieved  = [r["formation_achieved"] for r in all_results]
+    form_times     = [r["time_to_formation"]  for r in all_results
+                      if r["formation_achieved"]]
+    success_count  = sum(form_achieved)
+    print(f"\n5. Formation Success (angle<{FORM_ANGLE_THRESH:.0f}° AND dist<{FORM_DIST_THRESH:.1f}m selama {FORM_WINDOW} step berturutan):")
+    print(f"   success rate : {success_count}/{len(all_results)} episode  ({100*success_count/len(all_results):.0f}%)")
+    if form_times:
+        print(f"   time to form : mean={np.mean(form_times):.0f} step  "
+              f"min={np.min(form_times)} step  max={np.max(form_times)} step")
+    else:
+        print(f"   time to form : N/A (tidak ada episode yang berhasil)")
+
+    print()
+    print("─" * 60)
+    print("Distribusi — dasar penentuan threshold success:")
+    thresholds = [
+        ("dist_error  < 0.3m",  dist_errs,  lambda x: x < 0.3),
+        ("dist_error  < 0.5m",  dist_errs,  lambda x: x < 0.5),
+        ("angle_error < 10°",   angle_errs, lambda x: x < 10),
+        ("angle_error < 20°",   angle_errs, lambda x: x < 20),
+        ("angle_error < 30°",   angle_errs, lambda x: x < 30),
+        ("heading_err < 20°",   hdg_errs,   lambda x: x < 20),
+        ("heading_err < 30°",   hdg_errs,   lambda x: x < 30),
+        ("zero collision",      collisions, lambda x: x == 0),
+    ]
+    for label, data, cond in thresholds:
+        count = sum(1 for x in data if cond(x))
+        print(f"  {label:22s}: {count:2d}/{len(data)} episode")
+    print("─" * 60)
+
+    # Simpan hasil
+    out_path = os.path.join(script_dir, "..", "logs",
+                            f"eval_square_{args.model.split('/')[-1]}.txt")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as f:
+        f.write(f"Model: {model_path}\n\n")
         for r in all_results:
             f.write(str(r) + "\n")
-        f.write(f"\nMean distance_error : {np.mean(dist_errors):.4f}\n")
-        f.write(f"Mean heading_error  : {np.mean(hdg_errors):.2f}\n")
-        f.write(f"Mean collinearity   : {np.mean(coll_errors):.4f}\n")
-        f.write(f"Mean collision_steps: {np.mean(collisions):.1f}\n")
-    print(f"\nHasil disimpan: {output_path}")
+        f.write(f"\nmean_dist_error  : {np.mean(dist_errs):.4f}\n")
+        f.write(f"mean_angle_error : {np.mean(angle_errs):.2f}\n")
+        f.write(f"mean_heading_err : {np.mean(hdg_errs):.2f}\n")
+        f.write(f"mean_collisions  : {np.mean(collisions):.1f}\n")
+    print(f"\nHasil disimpan: {out_path}")
 
-    # Cleanup
     for env in envs:
         env.close()
 

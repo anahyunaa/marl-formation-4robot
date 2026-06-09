@@ -64,6 +64,9 @@ COLLISION_PEN   = 20.0      # penalty collision
 SPAWN_HALF      = 1.5       # turun dari 2.0
 SPAWN_MIN_DIST  = 1.0
 
+# Smoothness penalty (jerk penalty)
+LAMBDA_SMOOTH   = 0.1    # bobot penalty perubahan action antar timestep
+
 # Curriculum Learning
 RANDOM_YAW      = False     # Phase 1: yaw=0, Phase 2: True
 
@@ -192,6 +195,8 @@ class GazeboFormationEnv(gym.Env):
 
         self._rate       = rospy.Rate(CONTROL_RATE)
         self._step_count = 0
+        self._prev_v     = 0.0
+        self._prev_w     = 0.0
 
         time.sleep(0.5)
         rospy.loginfo(f"GazeboFormationEnv [{self.robot_name}] ready.")
@@ -201,6 +206,8 @@ class GazeboFormationEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self._step_count = 0
+        self._prev_v     = 0.0
+        self._prev_w     = 0.0
 
         if self.robot_id == 0:
             positions = _random_spawn_positions(
@@ -225,6 +232,8 @@ class GazeboFormationEnv(gym.Env):
 
         self._rate.sleep()
         self._step_count += 1
+        self._prev_v = v
+        self._prev_w = w
 
         obs        = self._get_obs()
         reward     = self._compute_reward()
@@ -252,6 +261,8 @@ class GazeboFormationEnv(gym.Env):
         Semua dalam body frame robot ini.
         """
         me     = _shared_state[self.robot_name]
+        v      = me["v"]
+        w      = me["w"]
         others = self._get_sorted_neighbors()
 
         n1 = _shared_state[others[0][1]]
@@ -288,6 +299,8 @@ class GazeboFormationEnv(gym.Env):
         r_hdg diberi bobot 0.5*GAMMA agar tidak mendominasi geometri.
         """
         me     = _shared_state[self.robot_name]
+        v      = me["v"]
+        w      = me["w"]
         others = self._get_sorted_neighbors()
 
         n1 = _shared_state[others[0][1]]
@@ -324,10 +337,14 @@ class GazeboFormationEnv(gym.Env):
         # Collision penalty
         r_col = -COLLISION_PEN if min(d1, d2) < D_SAFE else 0.0
 
+        # Jerk penalty — kurangi maju-mundur dan oscillation
+        r_smooth = -LAMBDA_SMOOTH * (abs(v - self._prev_v) + abs(w - self._prev_w))
+
         raw = (ALPHA * r_dist1 + ALPHA * r_dist2 +
                ANGLE_W * r_angle +
                0.5 * GAMMA * r_hdg +
                r_far +
+               r_smooth +
                r_col)
         return float(raw / 10.0)
 

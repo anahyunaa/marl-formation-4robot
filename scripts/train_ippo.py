@@ -21,8 +21,8 @@ Cara pakai:
     python3 train_ippo.py
 
 Output:
-    models/ppo_shared_final.zip
-    logs/ppo_shared/ (TensorBoard)
+    models/ppo_square_final.zip
+    logs/ppo_square/ (TensorBoard)
 """
 
 import os
@@ -43,8 +43,8 @@ from env_gazebo import GazeboFormationEnv, ROBOT_NAMES
 #  KONFIGURASI TRAINING
 # ─────────────────────────────────────────────
 
-TOTAL_TIMESTEPS  = 100_000   # total timestep (semua robot gabungan)
-SAVE_EVERY_STEPS = 10_000    # checkpoint interval
+TOTAL_TIMESTEPS  = 20_000   # total timestep (semua robot gabungan)
+SAVE_EVERY_STEPS = 20_000    # checkpoint interval
 LOG_INTERVAL     = 10
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../models")
@@ -53,13 +53,13 @@ LOGS_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../logs")
 # PPO Hyperparameters
 PPO_PARAMS = {
     "learning_rate" : 3e-4,
-    "n_steps"       : 512,      # per env — total buffer = 512 × 4 robot = 2048
+    "n_steps"       : 1024,     # per env — total buffer = 1024 × 4 robot = 4096
     "batch_size"    : 64,
     "n_epochs"      : 10,
     "gamma"         : 0.99,
     "gae_lambda"    : 0.95,
     "clip_range"    : 0.2,
-    "ent_coef"      : 0.001,
+    "ent_coef"      : 0.01,
     "vf_coef"       : 0.5,
     "max_grad_norm" : 0.5,
     "verbose"       : 1,
@@ -93,7 +93,7 @@ class SharedPPOCallback(BaseCallback):
         if self.num_timesteps - self._last_save >= self.save_every:
             path = os.path.join(
                 self.save_dir,
-                f"ppo_shared_step{self.num_timesteps}"
+                f"ppo_square_step{self.num_timesteps}"
             )
             self.model.save(path)
             self._last_save = self.num_timesteps
@@ -154,28 +154,37 @@ def train():
     print("4 environment siap (dengan VecMonitor).\n")
 
     # ── Shared PPO Model ─────────────────────────────────────────
-    checkpoint_path = os.path.join(
-        MODELS_DIR,
-        "ppo_shared_step500012"
-    )
+    # Untuk fresh start: set CHECKPOINT = None
+    # Untuk lanjut dari checkpoint: set CHECKPOINT = "nama_file_tanpa_.zip"
+    # Contoh: CHECKPOINT = "ppo_square_step180000"
+    CHECKPOINT = "ppo_square_step180000"   # ← ganti ini sesuai kebutuhan
 
-    if os.path.exists(checkpoint_path + ".zip"):
-        print(f"Melanjutkan dari checkpoint: {checkpoint_path}.zip")
-
-        model = PPO.load(
-            checkpoint_path,
-            env=vec_env,
-            tensorboard_log=os.path.join(LOGS_DIR, "ppo_shared"),
-        )
-
+    if CHECKPOINT is not None:
+        checkpoint_path = os.path.join(MODELS_DIR, CHECKPOINT)
+        if os.path.exists(checkpoint_path + ".zip"):
+            print(f"Melanjutkan dari checkpoint: {checkpoint_path}.zip")
+            model = PPO.load(
+                checkpoint_path,
+                env             = vec_env,
+                tensorboard_log = os.path.join(LOGS_DIR, "ppo_square"),
+            )
+        else:
+            print(f"WARNING: Checkpoint {checkpoint_path}.zip tidak ditemukan!")
+            print("Fallback ke fresh start.")
+            model = PPO(
+                policy          = "MlpPolicy",
+                env             = vec_env,
+                tensorboard_log = os.path.join(LOGS_DIR, "ppo_square"),
+                policy_kwargs   = POLICY_KWARGS,
+                **PPO_PARAMS
+            )
     else:
-        print("Checkpoint tidak ditemukan, mulai fresh training.")
-
+        print("Fresh start training.")
         model = PPO(
-            policy="MlpPolicy",
-            env=vec_env,
-            tensorboard_log=os.path.join(LOGS_DIR, "ppo_shared"),
-            policy_kwargs=POLICY_KWARGS,
+            policy          = "MlpPolicy",
+            env             = vec_env,
+            tensorboard_log = os.path.join(LOGS_DIR, "ppo_square"),
+            policy_kwargs   = POLICY_KWARGS,
             **PPO_PARAMS
         )
 
@@ -196,13 +205,13 @@ def train():
         total_timesteps     = TOTAL_TIMESTEPS,
         callback            = callback,
         log_interval        = LOG_INTERVAL,
-        reset_num_timesteps = False,
-        tb_log_name         = "ppo_shared",
+        reset_num_timesteps = (CHECKPOINT is None),  # False jika dari checkpoint
+        tb_log_name         = "ppo_square",
     )
     t_elapsed = time.time() - t_start
 
     # ── Simpan Model Final ───────────────────────────────────────
-    final_path = os.path.join(MODELS_DIR, "ppo_shared_final")
+    final_path = os.path.join(MODELS_DIR, "ppo_square_final")
     model.save(final_path)
 
     print(f"\n{'='*60}")
