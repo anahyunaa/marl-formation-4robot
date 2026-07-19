@@ -1,28 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-"""
-env_gazebo.py — Square Formation
-=================================
-Gymnasium environment wrapper untuk IPPO training formasi persegi 4 robot.
-
-Target formasi:
-- 4 robot membentuk persegi dengan sisi D_TARGET = 1.5m
-- Sudut antar neighbor = 90°
-- Heading seragam (relatif, bukan absolut)
-
-Reward components:
-- r_dist1, r_dist2 : spacing ke 2 neighbor terdekat → D_TARGET
-- r_angle          : sudut antara 2 neighbor → 90° (cos → 0)
-- r_hdg            : heading alignment ke 2 neighbor → dpsi → 0
-- r_col            : collision penalty
-
-Changelog dari line formation:
-- Reward total diganti untuk square formation
-- MAX_STEPS: 1000 → 750
-- SPAWN_HALF: 2.0 → 1.5
-- GAMMA tetap 1.0 tapi r_hdg diberi bobot 0.5 di reward
-- Training fresh start (tidak dari checkpoint)
-"""
+"""Square Formation V2
+GAMMA tetap 1.0 tapi r_hdg diberi bobot 0.5 di reward"""
 
 import rospy
 import numpy as np
@@ -38,42 +17,37 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import math
 import time
 
-# ─────────────────────────────────────────────
-#  KONSTANTA GLOBAL
-# ─────────────────────────────────────────────
-
+#KONSTANTA GLOBAL
 ROBOT_NAMES     = ["r1", "r2", "r3", "r4"]
 N_ROBOTS        = len(ROBOT_NAMES)
 
-CONTROL_RATE    = 10        # Hz
-MAX_STEPS       = 750       # turun dari 1000
+CONTROL_RATE    = 10 #Hz
+MAX_STEPS       = 750
 
-V_MAX           = 0.3       # m/s
-W_MAX           = 0.5       # rad/s
+V_MAX           = 0.3
+W_MAX           = 0.5
 
-D_TARGET        = 1.5       # meter — sisi persegi
-D_SAFE          = 0.75      # meter — collision threshold
+D_TARGET        = 1.5
+D_SAFE          = 0.75
 
 # Reward weights
-ALPHA           = 1.0       # bobot r_dist (per neighbor)
-GAMMA           = 1.0       # bobot r_hdg (di reward pakai 0.5 * GAMMA)
-ANGLE_W         = 5.0       # bobot r_angle — dinaikkan untuk dorong 90°
-COLLISION_PEN   = 20.0      # penalty collision
+ALPHA           = 1.0 # bobot r_dist (per neighbor)
+GAMMA           = 1.0 # bobot r_hdg (di reward pakai 0.5 * GAMMA)
+ANGLE_W         = 5.0 # bobot r_angle — dinaikkan untuk dorong 90°
+COLLISION_PEN   = 20.0 # penalty collision
 
 # Spawn
-SPAWN_HALF      = 1.5       # turun dari 2.0
+SPAWN_HALF      = 1.5
 SPAWN_MIN_DIST  = 1.0
 
 # Smoothness penalty (jerk penalty)
-LAMBDA_SMOOTH   = 0.1    # bobot penalty perubahan action antar timestep
+LAMBDA_SMOOTH   = 0.1 # bobot penalty perubahan action antar timestep
 
 # Curriculum Learning
-RANDOM_YAW      = False     # Phase 1: yaw=0, Phase 2: True
+RANDOM_YAW      = False # Phase 1: yaw=0, Phase 2: True
 
 
-# ─────────────────────────────────────────────
-#  SHARED STATE
-# ─────────────────────────────────────────────
+# SHARED STATE
 
 _shared_state = {
     name: {"x": 0.0, "y": 0.0, "yaw": 0.0, "v": 0.0, "w": 0.0}
@@ -127,23 +101,10 @@ def _random_spawn_positions(n: int, half: float, min_dist: float,
              0.0) for gx, gy in grid[:n]]
 
 
-# ─────────────────────────────────────────────
-#  ENVIRONMENT CLASS
-# ─────────────────────────────────────────────
+# ENVIRONMENT CLASS
 
 class GazeboFormationEnv(gym.Env):
-    """
-    Square formation environment untuk parameter-sharing PPO.
-
-    State: [dx1, dy1, dx2, dy2, v_self, w_self, dpsi1, dpsi2] — 8 dimensi
-    Action: [v, w] continuous
-
-    Reward mendorong:
-    1. Jarak ke 2 neighbor → D_TARGET (sisi persegi)
-    2. Sudut antara 2 neighbor → 90° (bentuk persegi, bukan rhombus)
-    3. Heading alignment ke 2 neighbor → 0 (semua menghadap arah sama)
-    4. Collision avoidance
-    """
+    """Square formation environment"""
 
     metadata = {"render_modes": []}
 
@@ -201,8 +162,7 @@ class GazeboFormationEnv(gym.Env):
         time.sleep(0.5)
         rospy.loginfo(f"GazeboFormationEnv [{self.robot_name}] ready.")
 
-    # ── Gymnasium API ────────────────────────────────────────────
-
+    # Gymnasium API
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self._step_count = 0
@@ -253,8 +213,7 @@ class GazeboFormationEnv(gym.Env):
     def close(self):
         self._stop_robot()
 
-    # ── Observasi ────────────────────────────────────────────────
-
+    # Observasi
     def _get_obs(self) -> np.ndarray:
         """
         State: [dx1, dy1, dx2, dy2, v_self, w_self, dpsi1, dpsi2]
@@ -279,25 +238,9 @@ class GazeboFormationEnv(gym.Env):
             dpsi1, dpsi2
         ], dtype=np.float32)
 
-    # ── Reward ───────────────────────────────────────────────────
-
+    # Reward
     def _compute_reward(self) -> float:
-        """
-        Square formation reward.
-
-        Komponen:
-        - r_dist1, r_dist2 : jarak ke 2 neighbor → D_TARGET
-        - r_angle          : sudut antara 2 neighbor → 90° (cos_angle → 0)
-        - r_hdg            : heading alignment → dpsi1 + dpsi2 → 0
-        - r_col            : collision penalty
-
-        Catatan desain:
-        r_angle diberi bobot ANGLE_W=5.0 untuk memaksa sudut 90°.
-        r_far adalah penalty kuadrat untuk separasi > 2.5m —
-        mencegah free rider problem (satu robot "kabur" dari kelompok).
-        Tetap local observation: hanya butuh d1 dan d2.
-        r_hdg diberi bobot 0.5*GAMMA agar tidak mendominasi geometri.
-        """
+        """note: r_hdg diberi bobot 0.5*GAMMA agar tidak mendominasi geometri"""
         me     = _shared_state[self.robot_name]
         v      = me["v"]
         w      = me["w"]
@@ -317,17 +260,16 @@ class GazeboFormationEnv(gym.Env):
         r_dist1 = -abs(d1 - D_TARGET)
         r_dist2 = -abs(d2 - D_TARGET)
 
-        # Angle reward — sudut antara dua neighbor harus 90°
+        # Angle reward untuk sudut antara dua neighbor harus 90°
         # cos(90°) = 0, sehingga target: cos_angle → 0
         cos_angle = (dx1*dx2 + dy1*dy2) / (d1 * d2 + 1e-6)
         r_angle   = -abs(cos_angle)
 
-        # Heading alignment — relatif ke 2 neighbor
+        # Heading alignment: relatif ke 2 neighbor
         r_hdg = -abs(dpsi1) - abs(dpsi2)
 
-        # Penalty kuadrat untuk separasi jauh — mencegah robot "kabur"
+        # Penalty kuadrat untuk separasi jauh dan mencegah robot "kabur"
         # Aktif hanya jika jarak > 2.5m (> D_TARGET + margin)
-        # Tetap local observation: hanya butuh d1 dan d2
         r_far = 0.0
         if d1 > 2.5:
             r_far -= 0.2 * (d1 - 2.5) ** 2
@@ -337,7 +279,7 @@ class GazeboFormationEnv(gym.Env):
         # Collision penalty
         r_col = -COLLISION_PEN if min(d1, d2) < D_SAFE else 0.0
 
-        # Jerk penalty — kurangi maju-mundur dan oscillation
+        # Jerk penalty untuk kurangi maju-mundur dan oscillation
         r_smooth = -LAMBDA_SMOOTH * (abs(v - self._prev_v) + abs(w - self._prev_w))
 
         raw = (ALPHA * r_dist1 + ALPHA * r_dist2 +
@@ -348,8 +290,7 @@ class GazeboFormationEnv(gym.Env):
                r_col)
         return float(raw / 10.0)
 
-    # ── Termination ──────────────────────────────────────────────
-
+    # Termination
     def _check_collision(self) -> bool:
         me = _shared_state[self.robot_name]
         for name in ROBOT_NAMES:
@@ -361,8 +302,7 @@ class GazeboFormationEnv(gym.Env):
                 return True
         return False
 
-    # ── Helper ───────────────────────────────────────────────────
-
+    # Helper
     def _get_sorted_neighbors(self) -> list:
         me = _shared_state[self.robot_name]
         others = []
@@ -411,13 +351,9 @@ class GazeboFormationEnv(gym.Env):
         self._cmd_pub.publish(Twist())
 
 
-# ─────────────────────────────────────────────
-#  SMOKE TEST
-# ─────────────────────────────────────────────
-
+# SMOKE TEST
 if __name__ == "__main__":
-    print("=== Smoke test env_gazebo.py — Square Formation ===")
-    print("Pastikan Gazebo + formasi_4_robot.launch sudah berjalan.")
+    print("CEK CEK")
     print()
 
     env = GazeboFormationEnv(robot_id=0)

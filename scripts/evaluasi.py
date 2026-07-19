@@ -1,26 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-"""
-evaluasi_square.py
-==================
-Script evaluasi formal untuk square formation 4 robot.
-
-Metrik per episode:
-- side_distance_error : rata-rata |d_actual - D_TARGET| ke 2 neighbor
-- angle_error_deg     : seberapa jauh sudut antar 2 neighbor dari 90°
-- collision_count     : jumlah timestep dengan jarak < D_SAFE
-- heading_error_deg   : rata-rata |dpsi| ke 2 neighbor (secondary)
-
-Cara pakai:
-    python3 evaluasi_square.py --model models/ppo_square_step160000 --episodes 20
-    python3 evaluasi_square.py --model models/ppo_square_step100000 --episodes 20
-    python3 evaluasi_square.py --model models/ppo_square_step200000 --episodes 20
-"""
+"""Cara pakainya di terminal kedua: python3 evaluasi.py --model models/baseline/ppo_square_final --episodes 30"""
 
 import argparse
 import os
 import sys
 import math
+import csv
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -32,17 +18,15 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 
-# ─────────────────────────────────────────────
 #  FORMATION SUCCESS THRESHOLD (tunable)
-# ─────────────────────────────────────────────
-FORM_ANGLE_THRESH = 30.0   # derajat — angle error harus di bawah ini
-FORM_DIST_THRESH  = 1.0    # meter   — dist error harus di bawah ini
-FORM_WINDOW       = 50     # step berturutan yang harus memenuhi threshold
+
+FORM_ANGLE_THRESH = 30.0 # derajat, angle error harus di bawah angka ini
+FORM_DIST_THRESH  = 1.0
+FORM_WINDOW       = 50 # step berturutan yang harus memenuhi threshold
 
 
-# ─────────────────────────────────────────────
 #  HELPER METRICS
-# ─────────────────────────────────────────────
+
 
 def get_sorted_neighbors(robot_name: str) -> list:
     me = _shared_state[robot_name]
@@ -73,9 +57,7 @@ def wrap_angle(angle: float) -> float:
 
 
 def compute_metrics_all_robots() -> dict:
-    """
-    Hitung metrik untuk semua robot, return rata-rata.
-    """
+    """Hitung metrik untuk semua robot, return rata-rata"""
     dist_errors  = []
     angle_errors = []
     hdg_errors   = []
@@ -99,8 +81,8 @@ def compute_metrics_all_robots() -> dict:
         # Angle error — sudut antar 2 neighbor vs target 90°
         cos_angle   = (dx1*dx2 + dy1*dy2) / (d1 * d2 + 1e-6)
         cos_angle   = max(-1.0, min(1.0, cos_angle))  # clamp numerical errors
-        actual_deg  = math.degrees(math.acos(cos_angle))  # tanpa abs() — 60° ≠ 120°
-        # Target 90°: error = |actual - 90|
+        actual_deg  = math.degrees(math.acos(cos_angle))
+        # Target 90°
         angle_err   = abs(actual_deg - 90.0)
         angle_errors.append(angle_err)
 
@@ -129,9 +111,7 @@ def check_any_collision() -> bool:
     return False
 
 
-# ─────────────────────────────────────────────
 #  EVALUASI SATU EPISODE
-# ─────────────────────────────────────────────
 
 def evaluate_episode(envs: list, model: PPO, episode_num: int) -> dict:
     # Reset
@@ -148,6 +128,8 @@ def evaluate_episode(envs: list, model: PPO, episode_num: int) -> dict:
     done = False
 
     # Formation tracking (threshold defined at module level)
+    # TIDAK DIUBAH — tetap pakai mekanisme jendela 50-step berturutan,
+    # sesuai Gambar 3.4 di laporan. Ini independen dari perubahan di bawah.
     formation_achieved    = False
     time_to_formation     = -1   # -1 = tidak tercapai
     consecutive_form_steps = 0
@@ -173,11 +155,10 @@ def evaluate_episode(envs: list, model: PPO, episode_num: int) -> dict:
         if check_any_collision():
             collision_count += 1
 
-        # Cek apakah formasi tercapai di step ini
+        # Cek apakah formasi tercapai di step ini (TIDAK DIUBAH)
         step_counter += 1
-        m_now = compute_metrics_all_robots()
-        if (m_now["angle_error"] < FORM_ANGLE_THRESH and
-                m_now["dist_error"] < FORM_DIST_THRESH):
+        if (m["angle_error"] < FORM_ANGLE_THRESH and
+                m["dist_error"] < FORM_DIST_THRESH):
             consecutive_form_steps += 1
             if (consecutive_form_steps >= FORM_WINDOW
                     and not formation_achieved):
@@ -186,45 +167,48 @@ def evaluate_episode(envs: list, model: PPO, episode_num: int) -> dict:
         else:
             consecutive_form_steps = 0  # reset kalau keluar threshold
 
-    # Rata-rata 100 step terakhir
-    last_n = 100
+    # ── PERUBAHAN UTAMA (final, sesuai klarifikasi dospem) ──────────
+    # Dospem menganggap episode "selesai" pada saat formasi PERTAMA KALI
+    # tercapai (bukan selalu di step 750). Jadi:
+    #   - Kalau formation_achieved -> ambil state di step time_to_formation
+    #   - Kalau tidak tercapai     -> ambil state di step terakhir (750)
+    #
+    # formation_achieved, time_to_formation, dan jendela 50-step TETAP
+    # tidak diubah — hanya menentukan INDEX step mana yang datanya diambil.
+    if formation_achieved:
+        record_idx = time_to_formation - 1  # index array 0-based
+    else:
+        record_idx = -1  # step terakhir episode
+
     result = {
         "episode"                  : episode_num,
-        # Mean 100 step terakhir
-        "dist_error_m"             : round(float(np.mean(step_dist[-last_n:])), 4),
-        "angle_error_deg"          : round(float(np.mean(step_angle[-last_n:])), 2),
-        "heading_error_deg"        : round(float(np.mean(step_hdg[-last_n:])), 2),
-        # Kondisi step terakhir (untuk pertanyaan sidang "kondisi akhir formasi")
-        "final_dist_error_m"       : round(float(step_dist[-1]), 4),
-        "final_angle_error_deg"    : round(float(step_angle[-1]), 2),
+        "dist_error_m"             : round(float(step_dist[record_idx]), 4),
+        "angle_error_deg"          : round(float(step_angle[record_idx]), 2),
+        "heading_error_deg"        : round(float(step_hdg[record_idx]), 2),
         "collision_count"          : collision_count,
         "formation_achieved"       : formation_achieved,
         "time_to_formation"        : time_to_formation,
+        "recorded_at_step"         : time_to_formation if formation_achieved else step_counter,
     }
 
-    print(f"\nEpisode {episode_num:02d}:")
-    print(f"  dist_error   = {result['dist_error_m']:.4f} m  "
-          f"(final: {result['final_dist_error_m']:.4f} m)")
-    print(f"  angle_error  = {result['angle_error_deg']:.2f} °  "
-          f"(final: {result['final_angle_error_deg']:.2f} °)")
-    print(f"  heading_err  = {result['heading_error_deg']:.2f} °")
-    print(f"  collisions   = {result['collision_count']} steps")
+    record_label = f"step {result['recorded_at_step']} (saat formasi tercapai)" if formation_achieved else f"step {result['recorded_at_step']} (episode gagal, state akhir)"
+    print(f"\nEpisode {episode_num:02d}:  [data direkam di {record_label}]")
+    print(f"  dist_error    = {result['dist_error_m']:.4f} m")
+    print(f"  angle_error   = {result['angle_error_deg']:.2f} °")
+    print(f"  heading_error = {result['heading_error_deg']:.2f} °")
+    print(f"  collisions    = {result['collision_count']} steps")
     status = f"step {result['time_to_formation']}" if result['formation_achieved'] else "TIDAK TERCAPAI"
-    print(f"  formation    = {'✓ TERCAPAI' if result['formation_achieved'] else '✗ tidak'} ({status})")
+    print(f"  formation     = {'TERCAPAI' if result['formation_achieved'] else 'tidak'} ({status})")
 
     return result
 
-
-# ─────────────────────────────────────────────
 #  MAIN
-# ─────────────────────────────────────────────
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model",    type=str,
-                        default="models/ppo_square_step160000",
+                        default="models/baseline/ppo_square_final",
                         help="Path ke model (tanpa .zip)")
-    parser.add_argument("--episodes", type=int, default=20)
+    parser.add_argument("--episodes", type=int, default=30)
     args = parser.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -238,7 +222,6 @@ def main():
     print(f"Model    : {model_path}.zip")
     print(f"Episodes : {args.episodes}")
     print()
-    print("PASTIKAN: roslaunch marl_formation formasi_4_robot.launch")
     print("          sudah berjalan!")
     print()
     input("Tekan ENTER untuk mulai...")
@@ -264,30 +247,29 @@ def main():
     print("\n" + "=" * 60)
     print("SUMMARY EVALUASI — SQUARE FORMATION")
     print("=" * 60)
+    print("(metrik dist/angle/heading error direkam saat formasi PERTAMA KALI")
+    print(" tercapai; jika episode gagal, direkam di step terakhir/750)")
+    print()
 
-    dist_errs       = [r["dist_error_m"]         for r in all_results]
-    angle_errs      = [r["angle_error_deg"]      for r in all_results]
-    hdg_errs        = [r["heading_error_deg"]    for r in all_results]
-    collisions      = [r["collision_count"]      for r in all_results]
-    final_dist_errs = [r["final_dist_error_m"]   for r in all_results]
-    final_ang_errs  = [r["final_angle_error_deg"] for r in all_results]
+    dist_errs  = [r["dist_error_m"]      for r in all_results]
+    angle_errs = [r["angle_error_deg"]   for r in all_results]
+    hdg_errs   = [r["heading_error_deg"] for r in all_results]
+    collisions = [r["collision_count"]   for r in all_results]
 
     # Urutan: Distance → Angle → Collision → Heading (sesuai prioritas reward)
-    print(f"1. Side distance error (mean 100 last steps):")
+    print(f"1. Side distance error (state akhir episode):")
     print(f"   mean={np.mean(dist_errs):.4f}m  std={np.std(dist_errs):.4f}m  "
           f"min={np.min(dist_errs):.4f}m  max={np.max(dist_errs):.4f}m")
-    print(f"   final-step: mean={np.mean(final_dist_errs):.4f}m")
-    print(f"2. Angle error vs 90° (mean 100 last steps):")
+    print(f"2. Angle error vs 90° (state akhir episode):")
     print(f"   mean={np.mean(angle_errs):.2f}°  std={np.std(angle_errs):.2f}°  "
           f"min={np.min(angle_errs):.2f}°  max={np.max(angle_errs):.2f}°")
-    print(f"   final-step: mean={np.mean(final_ang_errs):.2f}°")
     print(f"3. Collision steps:")
     print(f"   mean={np.mean(collisions):.1f}  total={sum(collisions)}  "
           f"max={max(collisions)}")
-    print(f"4. Heading error (secondary):")
+    print(f"4. Heading error (state akhir episode, secondary):")
     print(f"   mean={np.mean(hdg_errs):.2f}°  std={np.std(hdg_errs):.2f}°")
 
-    # Formation success metrics
+    # Formation success metrics — TIDAK DIUBAH
     form_achieved  = [r["formation_achieved"] for r in all_results]
     form_times     = [r["time_to_formation"]  for r in all_results
                       if r["formation_achieved"]]
@@ -302,7 +284,7 @@ def main():
 
     print()
     print("─" * 60)
-    print("Distribusi — dasar penentuan threshold success:")
+    print("Distribusi:")
     thresholds = [
         ("dist_error  < 0.3m",  dist_errs,  lambda x: x < 0.3),
         ("dist_error  < 0.5m",  dist_errs,  lambda x: x < 0.5),
@@ -318,19 +300,50 @@ def main():
         print(f"  {label:22s}: {count:2d}/{len(data)} episode")
     print("─" * 60)
 
-    # Simpan hasil
+    # Simpan hasil — termasuk raw per-episode, biar bisa ditelusuri ulang
     out_path = os.path.join(script_dir, "..", "logs",
                             f"eval_square_{args.model.split('/')[-1]}.txt")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as f:
-        f.write(f"Model: {model_path}\n\n")
+        f.write(f"Model: {model_path}\n")
+        f.write(f"Metode metrik: direkam saat formasi PERTAMA KALI tercapai (time_to_formation);\n")
+        f.write(f"jika episode gagal, direkam di step terakhir (750)\n\n")
         for r in all_results:
             f.write(str(r) + "\n")
         f.write(f"\nmean_dist_error  : {np.mean(dist_errs):.4f}\n")
+        f.write(f"std_dist_error   : {np.std(dist_errs):.4f}\n")
         f.write(f"mean_angle_error : {np.mean(angle_errs):.2f}\n")
+        f.write(f"std_angle_error  : {np.std(angle_errs):.2f}\n")
         f.write(f"mean_heading_err : {np.mean(hdg_errs):.2f}\n")
+        f.write(f"std_heading_err  : {np.std(hdg_errs):.2f}\n")
         f.write(f"mean_collisions  : {np.mean(collisions):.1f}\n")
+        f.write(f"success_rate     : {success_count}/{len(all_results)} ({100*success_count/len(all_results):.0f}%)\n")
+        if form_times:
+            f.write(f"mean_time_to_form: {np.mean(form_times):.0f} step\n")
     print(f"\nHasil disimpan: {out_path}")
+
+    # Export CSV
+    csv_path = os.path.join(script_dir, "..", "logs",
+                            f"eval_square_{args.model.split('/')[-1]}.csv")
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "episode", "success", "time_to_formation",
+            "recorded_at_step", "dist_error_m", "angle_error_deg",
+            "heading_error_deg", "collision_count"
+        ])
+        for r in all_results:
+            writer.writerow([
+                r["episode"],
+                r["formation_achieved"],
+                r["time_to_formation"] if r["formation_achieved"] else "",
+                r["recorded_at_step"],
+                r["dist_error_m"],
+                r["angle_error_deg"],
+                r["heading_error_deg"],
+                r["collision_count"],
+            ])
+    print(f"CSV disimpan   : {csv_path}")
 
     for env in envs:
         env.close()

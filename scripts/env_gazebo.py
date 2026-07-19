@@ -1,28 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-"""
-env_gazebo.py — Square Formation
-=================================
-Gymnasium environment wrapper untuk IPPO training formasi persegi 4 robot.
-
-Target formasi:
-- 4 robot membentuk persegi dengan sisi D_TARGET = 1.5m
-- Sudut antar neighbor = 90°
-- Heading seragam (relatif, bukan absolut)
-
-Reward components:
-- r_dist1, r_dist2 : spacing ke 2 neighbor terdekat → D_TARGET
-- r_angle          : sudut antara 2 neighbor → 90° (cos → 0)
-- r_hdg            : heading alignment ke 2 neighbor → dpsi → 0
-- r_col            : collision penalty
-
-Changelog dari line formation:
-- Reward total diganti untuk square formation
-- MAX_STEPS: 1000 → 750
-- SPAWN_HALF: 2.0 → 1.5
-- GAMMA tetap 1.0 tapi r_hdg diberi bobot 0.5 di reward
-- Training fresh start (tidak dari checkpoint)
-"""
+"""Square Formation"""
 
 import rospy
 import numpy as np
@@ -38,21 +16,19 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import math
 import time
 
-# ─────────────────────────────────────────────
-#  KONSTANTA GLOBAL
-# ─────────────────────────────────────────────
+#KONSTANTA GLOBAL
 
 ROBOT_NAMES     = ["r1", "r2", "r3", "r4"]
 N_ROBOTS        = len(ROBOT_NAMES)
 
-CONTROL_RATE    = 10        # Hz
-MAX_STEPS       = 750       # turun dari 1000
+CONTROL_RATE    = 10        #Hz
+MAX_STEPS       = 750       #ini timestep
 
-V_MAX           = 0.3       # m/s
-W_MAX           = 0.5       # rad/s
+V_MAX           = 0.3       #kecepatan (m/s)
+W_MAX           = 0.5       #omega atau kecepatan sudut (rad/s)
 
-D_TARGET        = 1.5       # meter — sisi persegi
-D_SAFE          = 0.75      # meter — collision threshold
+D_TARGET        = 1.5       #meter — sisi persegi
+D_SAFE          = 0.75      #meter — collision threshold
 
 # Reward weights
 ALPHA           = 1.0       # bobot r_dist (per neighbor)
@@ -68,10 +44,7 @@ SPAWN_MIN_DIST  = 1.0
 RANDOM_YAW      = False     # Phase 1: yaw=0, Phase 2: True
 
 
-# ─────────────────────────────────────────────
 #  SHARED STATE
-# ─────────────────────────────────────────────
-
 _shared_state = {
     name: {"x": 0.0, "y": 0.0, "yaw": 0.0, "v": 0.0, "w": 0.0}
     for name in ROBOT_NAMES
@@ -124,23 +97,10 @@ def _random_spawn_positions(n: int, half: float, min_dist: float,
              0.0) for gx, gy in grid[:n]]
 
 
-# ─────────────────────────────────────────────
 #  ENVIRONMENT CLASS
-# ─────────────────────────────────────────────
 
 class GazeboFormationEnv(gym.Env):
-    """
-    Square formation environment untuk parameter-sharing PPO.
-
-    State: [dx1, dy1, dx2, dy2, v_self, w_self, dpsi1, dpsi2] — 8 dimensi
-    Action: [v, w] continuous
-
-    Reward mendorong:
-    1. Jarak ke 2 neighbor → D_TARGET (sisi persegi)
-    2. Sudut antara 2 neighbor → 90° (bentuk persegi, bukan rhombus)
-    3. Heading alignment ke 2 neighbor → 0 (semua menghadap arah sama)
-    4. Collision avoidance
-    """
+    """Square formation"""
 
     metadata = {"render_modes": []}
 
@@ -271,22 +231,7 @@ class GazeboFormationEnv(gym.Env):
     # ── Reward ───────────────────────────────────────────────────
 
     def _compute_reward(self) -> float:
-        """
-        Square formation reward.
-
-        Komponen:
-        - r_dist1, r_dist2 : jarak ke 2 neighbor → D_TARGET
-        - r_angle          : sudut antara 2 neighbor → 90° (cos_angle → 0)
-        - r_hdg            : heading alignment → dpsi1 + dpsi2 → 0
-        - r_col            : collision penalty
-
-        Catatan desain:
-        r_angle diberi bobot ANGLE_W=5.0 untuk memaksa sudut 90°.
-        r_far adalah penalty kuadrat untuk separasi > 2.5m —
-        mencegah free rider problem (satu robot "kabur" dari kelompok).
-        Tetap local observation: hanya butuh d1 dan d2.
-        r_hdg diberi bobot 0.5*GAMMA agar tidak mendominasi geometri.
-        """
+        """Square formation reward. r_hdg diberi bobot 0.5*GAMMA agar tidak mendominasi"""
         me     = _shared_state[self.robot_name]
         others = self._get_sorted_neighbors()
 

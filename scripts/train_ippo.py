@@ -1,29 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-"""
-train_ippo.py
-=============
-Parameter-Sharing PPO untuk formasi 4 robot skid-steer homogen.
-
-Arsitektur:
-- Satu policy PPO di-share oleh semua 4 robot (parameter sharing)
-- Setiap robot tetap mengeksekusi keputusan dari observasi lokalnya sendiri
-- Experience dari semua robot di-aggregate ke satu replay buffer
-- Decentralized execution: satu file model untuk semua robot
-
-Kenapa parameter sharing, bukan sequential IPPO:
-- Robot homogen: platform, action space, observation space, objective identik
-- Sequential IPPO menyebabkan non-stationarity sistematis (tetangga random)
-- Parameter sharing menghasilkan 4x data per update cycle
-- Lebih umum digunakan pada homogeneous MARL (Li et al. 2025)
-
-Cara pakai:
-    python3 train_ippo.py
-
-Output:
-    models/ppo_square_final.zip
-    logs/ppo_square/ (TensorBoard)
-"""
+"""Cara pakai: Buka terminal kedua terus > python3 train_ippo.py
+Output: models/ppo_square_final.zip"""
 
 import os
 import time
@@ -39,15 +17,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from env_gazebo import GazeboFormationEnv, ROBOT_NAMES
 
-# ─────────────────────────────────────────────
 #  KONFIGURASI TRAINING
-# ─────────────────────────────────────────────
 
-TOTAL_TIMESTEPS  = 20_000   # total timestep (semua robot gabungan)
+TOTAL_TIMESTEPS  = 100_000   # total timestep (semua robot gabungan)
 SAVE_EVERY_STEPS = 20_000    # checkpoint interval
 LOG_INTERVAL     = 10
 
-MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../models")
+MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../models/baseline")
 LOGS_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../logs")
 
 # PPO Hyperparameters
@@ -70,9 +46,7 @@ POLICY_KWARGS = {
 }
 
 
-# ─────────────────────────────────────────────
-#  CALLBACK
-# ─────────────────────────────────────────────
+# CALLBACK
 
 class SharedPPOCallback(BaseCallback):
     """Checkpoint + logging untuk shared policy."""
@@ -110,12 +84,9 @@ class SharedPPOCallback(BaseCallback):
         return True
 
 
-# ─────────────────────────────────────────────
-#  SETUP VECTORIZED ENV (4 robot = 4 env)
-# ─────────────────────────────────────────────
-
+# SETUP VECTORIZED ENV (4 robot = 4 env)
 def make_env(robot_id: int, seed: int):
-    """Factory function untuk satu env — diperlukan oleh VecEnv."""
+    """Factory function untuk satu env diperlukan oleh VecEnv."""
     def _init():
         env = GazeboFormationEnv(robot_id=robot_id, seed=seed + robot_id)
         return env
@@ -127,22 +98,21 @@ def train():
     os.makedirs(LOGS_DIR,   exist_ok=True)
 
     print("=" * 60)
-    print("Parameter-Sharing PPO — Formasi 4 Robot Homogen")
+    print("Parameter-Sharing PPO — Formasi 4 Robot")
     print("=" * 60)
     print(f"Total timesteps : {TOTAL_TIMESTEPS:,}")
     print(f"Buffer per update: {PPO_PARAMS['n_steps']} × 4 robot = "
           f"{PPO_PARAMS['n_steps'] * 4:,}")
     print(f"Models dir      : {MODELS_DIR}")
     print()
-    print("PASTIKAN: roslaunch marl_formation formasi_4_robot.launch")
     print("          sudah berjalan di terminal lain!")
     print()
-    input("Tekan ENTER untuk mulai training...")
+    input("ENTER untuk mulai training...")
 
     base_seed = int(time.time())
     print(f"Base seed: {base_seed}\n")
 
-    # ── Vectorized Environment ───────────────────────────────────
+    # Vectorized Environment
     # DummyVecEnv: semua env berjalan dalam satu proses (aman untuk WSL2 + ROS)
     # SubprocVecEnv tidak dipakai karena ROS node tidak bisa di-fork
     print("Inisialisasi 4 environment...")
@@ -153,11 +123,8 @@ def train():
     vec_env = VecMonitor(vec_env)  # wajib agar key "episode" tersedia di info
     print("4 environment siap (dengan VecMonitor).\n")
 
-    # ── Shared PPO Model ─────────────────────────────────────────
-    # Untuk fresh start: set CHECKPOINT = None
-    # Untuk lanjut dari checkpoint: set CHECKPOINT = "nama_file_tanpa_.zip"
-    # Contoh: CHECKPOINT = "ppo_square_step180000"
-    CHECKPOINT = "ppo_square_step180000"   # ← ganti ini sesuai kebutuhan
+    # Shared PPO Model
+    CHECKPOINT = "ppo_square_final"   # bisa ganti ini sesuai kebutuhan
 
     if CHECKPOINT is not None:
         checkpoint_path = os.path.join(MODELS_DIR, CHECKPOINT)
@@ -194,7 +161,7 @@ def train():
     print(f"  Output : 2 dimensi [v, w] (continuous)")
     print()
 
-    # ── Training ─────────────────────────────────────────────────
+    # Training
     callback = SharedPPOCallback(
         save_dir   = MODELS_DIR,
         save_every = SAVE_EVERY_STEPS,
@@ -210,7 +177,7 @@ def train():
     )
     t_elapsed = time.time() - t_start
 
-    # ── Simpan Model Final ───────────────────────────────────────
+    # Simpan Model Final
     final_path = os.path.join(MODELS_DIR, "ppo_square_final")
     model.save(final_path)
 
@@ -223,9 +190,6 @@ def train():
     vec_env.close()
 
 
-# ─────────────────────────────────────────────
 #  ENTRY POINT
-# ─────────────────────────────────────────────
-
 if __name__ == "__main__":
     train()

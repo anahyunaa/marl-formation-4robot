@@ -1,29 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-"""
-train_ippo_v2.py
-================
-Parameter-Sharing PPO — Eksperimen V2: Square Formation + Smoothness Penalty.
-
-Perbedaan dari baseline (train_ippo.py):
-- Menggunakan env_gazebo_v2.py yang mengandung jerk penalty
-- r_smooth = -0.1 * (|v - v_prev| + |w - w_prev|)
-- Models disimpan ke models/smoothness/
-- Logs disimpan ke logs/smoothness/
-- Fresh start dari nol (bukan dari checkpoint baseline)
-
-Tujuan eksperimen:
-Membandingkan perilaku robot dengan dan tanpa smoothness penalty.
-Baseline (env_gazebo.py): success rate 70%, gerakan tersendat-sendat
-V2 (env_gazebo_v2.py)   : diharapkan lebih mulus, success rate dipertahankan
-
-Cara pakai:
-    python3 train_ippo_v2.py
-
-Output:
-    models/smoothness/ppo_square_final.zip
-    logs/smoothness/ (TensorBoard)
-"""
+"""Eksperimen V2: Square Formation + Smoothness Penalty.
+Cara pakai: terminal kedua > python3 train_ippo_v2.py
+Output: models/smoothness/ppo_square_final.zip"""
 
 import os
 import time
@@ -39,21 +18,18 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from env_gazebo import GazeboFormationEnv, ROBOT_NAMES
 
-# ─────────────────────────────────────────────
-#  KONFIGURASI TRAINING
-# ─────────────────────────────────────────────
-
-TOTAL_TIMESTEPS  = 200_000   # total timestep (semua robot gabungan)
-SAVE_EVERY_STEPS = 50_000    # checkpoint interval
+# KONFIGURASI TRAINING
+TOTAL_TIMESTEPS  = 100_000
+SAVE_EVERY_STEPS = 50_000 # checkpoint
 LOG_INTERVAL     = 10
 
-MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../models/smoothness")
+MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../models/smooth_v2")
 LOGS_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../logs/smoothness")
 
 # PPO Hyperparameters
 PPO_PARAMS = {
     "learning_rate" : 3e-4,
-    "n_steps"       : 1024,     # per env — total buffer = 1024 × 4 robot = 4096
+    "n_steps"       : 1024, # per env — total buffer = 1024 × 4 robot = 4096
     "batch_size"    : 64,
     "n_epochs"      : 10,
     "gamma"         : 0.99,
@@ -70,10 +46,7 @@ POLICY_KWARGS = {
 }
 
 
-# ─────────────────────────────────────────────
 #  CALLBACK
-# ─────────────────────────────────────────────
-
 class SharedPPOCallback(BaseCallback):
     """Checkpoint + logging untuk shared policy."""
 
@@ -110,10 +83,7 @@ class SharedPPOCallback(BaseCallback):
         return True
 
 
-# ─────────────────────────────────────────────
-#  SETUP VECTORIZED ENV (4 robot = 4 env)
-# ─────────────────────────────────────────────
-
+# SETUP VECTORIZED ENV (4 robot = 4 env)
 def make_env(robot_id: int, seed: int):
     """Factory function untuk satu env — diperlukan oleh VecEnv."""
     def _init():
@@ -134,7 +104,6 @@ def train():
           f"{PPO_PARAMS['n_steps'] * 4:,}")
     print(f"Models dir      : {MODELS_DIR}")
     print()
-    print("PASTIKAN: roslaunch marl_formation formasi_4_robot.launch")
     print("          sudah berjalan di terminal lain!")
     print()
     input("Tekan ENTER untuk mulai training...")
@@ -142,22 +111,17 @@ def train():
     base_seed = int(time.time())
     print(f"Base seed: {base_seed}\n")
 
-    # ── Vectorized Environment ───────────────────────────────────
-    # DummyVecEnv: semua env berjalan dalam satu proses (aman untuk WSL2 + ROS)
-    # SubprocVecEnv tidak dipakai karena ROS node tidak bisa di-fork
+    # Vectorized Environment
     print("Inisialisasi 4 environment...")
     vec_env = DummyVecEnv([
         make_env(robot_id=i, seed=base_seed)
         for i in range(len(ROBOT_NAMES))
     ])
-    vec_env = VecMonitor(vec_env)  # wajib agar key "episode" tersedia di info
+    vec_env = VecMonitor(vec_env) # wajib agar key "episode" tersedia di info
     print("4 environment siap (dengan VecMonitor).\n")
 
-    # ── Shared PPO Model ─────────────────────────────────────────
-    # Untuk fresh start: set CHECKPOINT = None
-    # Untuk lanjut dari checkpoint: set CHECKPOINT = "nama_file_tanpa_.zip"
-    # Contoh: CHECKPOINT = "ppo_square_step180000"
-    CHECKPOINT = None   # Fresh start untuk eksperimen smoothness
+    # Shared PPO Model
+    CHECKPOINT = "ppo_square_smooth_final" # Fresh start untuk eksperimen smoothness
 
     if CHECKPOINT is not None:
         checkpoint_path = os.path.join(MODELS_DIR, CHECKPOINT)
@@ -194,7 +158,7 @@ def train():
     print(f"  Output : 2 dimensi [v, w] (continuous)")
     print()
 
-    # ── Training ─────────────────────────────────────────────────
+    # Training
     callback = SharedPPOCallback(
         save_dir   = MODELS_DIR,
         save_every = SAVE_EVERY_STEPS,
@@ -210,7 +174,7 @@ def train():
     )
     t_elapsed = time.time() - t_start
 
-    # ── Simpan Model Final ───────────────────────────────────────
+    # Simpan Model Final
     final_path = os.path.join(MODELS_DIR, "ppo_square_smooth_final")
     model.save(final_path)
 
@@ -223,9 +187,6 @@ def train():
     vec_env.close()
 
 
-# ─────────────────────────────────────────────
 #  ENTRY POINT
-# ─────────────────────────────────────────────
-
 if __name__ == "__main__":
     train()
