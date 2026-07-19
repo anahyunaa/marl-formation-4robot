@@ -1,0 +1,8 @@
+Model: /home/anahyuna/marl_ws/src/marl_formation/models/smooth_v2/ppo_square_smooth_step200000
+
+{'episode': 1, 'dist_error_m': 0.4415, 'angle_error_deg': 48.26, 'heading_error_deg': 14.05, 'final_dist_error_m': 0.5952, 'final_angle_error_deg': 58.93, 'collision_count': 24, 'formation_achieved': True, 'time_to_formation': 50}
+
+mean_dist_error  : 0.4415
+mean_angle_error : 48.26
+mean_heading_err : 14.05
+mean_collisions  : 24.0

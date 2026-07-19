@@ -1,0 +1,27 @@
+Model: /home/anahyuna/marl_ws/src/marl_formation/models/smooth_v3/ppo_square_v3_step150000
+
+{'episode': 1, 'dist_error_m': 0.329, 'angle_error_deg': 21.96, 'heading_error_deg': 12.36, 'final_dist_error_m': 0.1175, 'final_angle_error_deg': 25.49, 'collision_count': 43, 'formation_achieved': True, 'time_to_formation': 666}
+{'episode': 2, 'dist_error_m': 0.5584, 'angle_error_deg': 44.15, 'heading_error_deg': 8.48, 'final_dist_error_m': 0.5951, 'final_angle_error_deg': 56.81, 'collision_count': 75, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 3, 'dist_error_m': 1.8963, 'angle_error_deg': 32.2, 'heading_error_deg': 17.93, 'final_dist_error_m': 2.2049, 'final_angle_error_deg': 34.64, 'collision_count': 66, 'formation_achieved': True, 'time_to_formation': 464}
+{'episode': 4, 'dist_error_m': 1.7347, 'angle_error_deg': 35.43, 'heading_error_deg': 22.33, 'final_dist_error_m': 1.7801, 'final_angle_error_deg': 36.82, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 5, 'dist_error_m': 0.1481, 'angle_error_deg': 17.23, 'heading_error_deg': 9.04, 'final_dist_error_m': 0.3233, 'final_angle_error_deg': 35.62, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 322}
+{'episode': 6, 'dist_error_m': 0.1661, 'angle_error_deg': 33.69, 'heading_error_deg': 13.06, 'final_dist_error_m': 0.1265, 'final_angle_error_deg': 28.63, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 355}
+{'episode': 7, 'dist_error_m': 0.2138, 'angle_error_deg': 25.87, 'heading_error_deg': 8.8, 'final_dist_error_m': 0.1274, 'final_angle_error_deg': 28.23, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 615}
+{'episode': 8, 'dist_error_m': 1.2416, 'angle_error_deg': 23.25, 'heading_error_deg': 17.52, 'final_dist_error_m': 1.1436, 'final_angle_error_deg': 21.27, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 54}
+{'episode': 9, 'dist_error_m': 1.2933, 'angle_error_deg': 42.92, 'heading_error_deg': 12.46, 'final_dist_error_m': 1.2603, 'final_angle_error_deg': 42.74, 'collision_count': 686, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 10, 'dist_error_m': 1.3033, 'angle_error_deg': 32.97, 'heading_error_deg': 18.16, 'final_dist_error_m': 1.3134, 'final_angle_error_deg': 33.67, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 53}
+{'episode': 11, 'dist_error_m': 3.3386, 'angle_error_deg': 36.66, 'heading_error_deg': 10.8, 'final_dist_error_m': 3.4488, 'final_angle_error_deg': 35.98, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 12, 'dist_error_m': 2.6257, 'angle_error_deg': 36.7, 'heading_error_deg': 13.22, 'final_dist_error_m': 2.4706, 'final_angle_error_deg': 36.14, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 68}
+{'episode': 13, 'dist_error_m': 2.7136, 'angle_error_deg': 34.22, 'heading_error_deg': 22.37, 'final_dist_error_m': 2.619, 'final_angle_error_deg': 34.25, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 14, 'dist_error_m': 5.4913, 'angle_error_deg': 35.11, 'heading_error_deg': 29.21, 'final_dist_error_m': 5.4513, 'final_angle_error_deg': 34.79, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 172}
+{'episode': 15, 'dist_error_m': 0.0868, 'angle_error_deg': 27.24, 'heading_error_deg': 6.51, 'final_dist_error_m': 0.1034, 'final_angle_error_deg': 25.12, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 81}
+{'episode': 16, 'dist_error_m': 1.5496, 'angle_error_deg': 35.97, 'heading_error_deg': 10.86, 'final_dist_error_m': 1.8588, 'final_angle_error_deg': 35.54, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 91}
+{'episode': 17, 'dist_error_m': 7.4765, 'angle_error_deg': 35.01, 'heading_error_deg': 37.87, 'final_dist_error_m': 7.5958, 'final_angle_error_deg': 35.47, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 18, 'dist_error_m': 0.2406, 'angle_error_deg': 29.88, 'heading_error_deg': 6.47, 'final_dist_error_m': 0.1868, 'final_angle_error_deg': 25.11, 'collision_count': 38, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 19, 'dist_error_m': 1.8358, 'angle_error_deg': 33.76, 'heading_error_deg': 19.21, 'final_dist_error_m': 1.8077, 'final_angle_error_deg': 33.87, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1}
+{'episode': 20, 'dist_error_m': 1.8639, 'angle_error_deg': 36.57, 'heading_error_deg': 13.34, 'final_dist_error_m': 1.9602, 'final_angle_error_deg': 36.54, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1}
+
+mean_dist_error  : 1.8054
+mean_angle_error : 32.54
+mean_heading_err : 15.50
+mean_collisions  : 45.4

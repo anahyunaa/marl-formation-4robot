@@ -1,0 +1,44 @@
+Model: /home/anahyuna/marl_ws/src/marl_formation/models/baseline/ppo_square_final
+Metode metrik: direkam saat formasi PERTAMA KALI tercapai (time_to_formation);
+jika episode gagal, direkam di step terakhir (750)
+
+{'episode': 1, 'dist_error_m': 0.06, 'angle_error_deg': 1.94, 'heading_error_deg': 10.75, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 2, 'dist_error_m': 0.2981, 'angle_error_deg': 6.82, 'heading_error_deg': 12.52, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 123, 'recorded_at_step': 123}
+{'episode': 3, 'dist_error_m': 0.063, 'angle_error_deg': 10.83, 'heading_error_deg': 7.47, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 120, 'recorded_at_step': 120}
+{'episode': 4, 'dist_error_m': 0.1115, 'angle_error_deg': 20.85, 'heading_error_deg': 15.12, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 5, 'dist_error_m': 0.3432, 'angle_error_deg': 3.59, 'heading_error_deg': 10.97, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 86, 'recorded_at_step': 86}
+{'episode': 6, 'dist_error_m': 0.1119, 'angle_error_deg': 32.55, 'heading_error_deg': 13.63, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1, 'recorded_at_step': 750}
+{'episode': 7, 'dist_error_m': 0.4883, 'angle_error_deg': 0.78, 'heading_error_deg': 4.53, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 83, 'recorded_at_step': 83}
+{'episode': 8, 'dist_error_m': 0.3513, 'angle_error_deg': 13.63, 'heading_error_deg': 24.64, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 69, 'recorded_at_step': 69}
+{'episode': 9, 'dist_error_m': 0.5063, 'angle_error_deg': 4.29, 'heading_error_deg': 14.07, 'collision_count': 37, 'formation_achieved': True, 'time_to_formation': 173, 'recorded_at_step': 173}
+{'episode': 10, 'dist_error_m': 0.2879, 'angle_error_deg': 6.16, 'heading_error_deg': 14.4, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 53, 'recorded_at_step': 53}
+{'episode': 11, 'dist_error_m': 0.0611, 'angle_error_deg': 8.75, 'heading_error_deg': 13.48, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 12, 'dist_error_m': 0.1956, 'angle_error_deg': 26.31, 'heading_error_deg': 9.92, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 268, 'recorded_at_step': 268}
+{'episode': 13, 'dist_error_m': 0.1896, 'angle_error_deg': 3.69, 'heading_error_deg': 11.81, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 90, 'recorded_at_step': 90}
+{'episode': 14, 'dist_error_m': 0.1371, 'angle_error_deg': 9.22, 'heading_error_deg': 21.58, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 229, 'recorded_at_step': 229}
+{'episode': 15, 'dist_error_m': 0.3786, 'angle_error_deg': 5.61, 'heading_error_deg': 17.36, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 16, 'dist_error_m': 0.1847, 'angle_error_deg': 4.2, 'heading_error_deg': 22.36, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 141, 'recorded_at_step': 141}
+{'episode': 17, 'dist_error_m': 0.298, 'angle_error_deg': 12.78, 'heading_error_deg': 15.28, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 18, 'dist_error_m': 0.3354, 'angle_error_deg': 26.58, 'heading_error_deg': 9.09, 'collision_count': 42, 'formation_achieved': True, 'time_to_formation': 716, 'recorded_at_step': 716}
+{'episode': 19, 'dist_error_m': 0.0607, 'angle_error_deg': 29.88, 'heading_error_deg': 8.55, 'collision_count': 0, 'formation_achieved': False, 'time_to_formation': -1, 'recorded_at_step': 750}
+{'episode': 20, 'dist_error_m': 0.4177, 'angle_error_deg': 2.4, 'heading_error_deg': 12.22, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 21, 'dist_error_m': 0.1083, 'angle_error_deg': 6.23, 'heading_error_deg': 11.75, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 218, 'recorded_at_step': 218}
+{'episode': 22, 'dist_error_m': 0.0677, 'angle_error_deg': 20.36, 'heading_error_deg': 12.28, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 219, 'recorded_at_step': 219}
+{'episode': 23, 'dist_error_m': 0.2577, 'angle_error_deg': 6.73, 'heading_error_deg': 12.1, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 161, 'recorded_at_step': 161}
+{'episode': 24, 'dist_error_m': 0.2533, 'angle_error_deg': 7.94, 'heading_error_deg': 15.41, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 77, 'recorded_at_step': 77}
+{'episode': 25, 'dist_error_m': 0.0767, 'angle_error_deg': 12.01, 'heading_error_deg': 9.55, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 87, 'recorded_at_step': 87}
+{'episode': 26, 'dist_error_m': 0.1352, 'angle_error_deg': 4.17, 'heading_error_deg': 7.55, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 70, 'recorded_at_step': 70}
+{'episode': 27, 'dist_error_m': 0.078, 'angle_error_deg': 4.57, 'heading_error_deg': 4.73, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 28, 'dist_error_m': 0.1182, 'angle_error_deg': 15.97, 'heading_error_deg': 16.32, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 569, 'recorded_at_step': 569}
+{'episode': 29, 'dist_error_m': 0.3453, 'angle_error_deg': 2.57, 'heading_error_deg': 10.38, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 50, 'recorded_at_step': 50}
+{'episode': 30, 'dist_error_m': 0.1177, 'angle_error_deg': 10.05, 'heading_error_deg': 11.99, 'collision_count': 0, 'formation_achieved': True, 'time_to_formation': 67, 'recorded_at_step': 67}
+
+mean_dist_error  : 0.2146
+std_dist_error   : 0.1337
+mean_angle_error : 10.72
+std_angle_error  : 8.69
+mean_heading_err : 12.73
+std_heading_err  : 4.56
+mean_collisions  : 2.6
+success_rate     : 28/30 (93%)
+mean_time_to_form: 144 step
